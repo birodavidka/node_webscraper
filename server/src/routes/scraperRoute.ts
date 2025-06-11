@@ -1,10 +1,10 @@
 import express from 'express';
 
-import { /* valamik a kontrollerből */ scrape} from '../controllers/scraperController';
+import { /* valamik a kontrollerből */ testScrape} from '../controllers/scraperController';
 
 const router = express.Router();
 
 // Define the route for scraping
-router.get('/scrape', scrape);
+router.get('/puppeteer', testScrape);
 
 export default router;

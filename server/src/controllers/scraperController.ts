@@ -1,15 +1,26 @@
+import puppeteer from "puppeteer";
 
+/**
+ * Controller function to scrape a webpage and take a screenshot.
+ * This function is used for testing purposes.
+ * 
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ */
 
-export const scrape = async (req, res) => {
-
+export const testScrape = async (req, res) => {
   try {
-    console.log("scrape function called");
-    res.status(200).json({ message: "Scrape function called successfully." });
+  const browser = await puppeteer.launch(
+    {headless: true} // run in headless mode
+  ); //open a new browser instance
+  const page = await browser.newPage(); //open a page
+  await page.goto("https://example.com"); //navigate to the URL
+
+
   } catch (error) {
-    console.error("Error in scrape function:", error);
-    res.status(500).json({ error: "An error occurred while scraping." });
+    console.error("Error in testScrape function:", error);
+    res.status(500).json({ error: "An error occurred while testing the scrape." });
     return;
-    
   }
-  console.log("scrape function called");
+  console.log("testScrape function called");
 }
