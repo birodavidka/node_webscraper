@@ -8,6 +8,7 @@ import morgan from 'morgan';
 import bodyParser from 'body-parser';
 import { puppeteerConfig } from './config/puppeteerConfig';
 import { brightDataConfig } from './config/brightDataConfig';
+import {initTelegramBot} from './services/telegramBotService'
 import { uptime } from 'process';
 
 /* SETUP */
@@ -23,6 +24,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 /* IMPORT ROUTES */
 import scraperRoute from './routes/scraperRoute';
 import serverHealthRoute from './routes/serverHealthRoute';
+import authRoute from './routes/authRoute';
 
 /* ROUTES */
 app.get('/', (_req, res) => {
@@ -30,6 +32,7 @@ app.get('/', (_req, res) => {
 });
 app.use('/api', scraperRoute)
 app.use('/health',serverHealthRoute); /* HEALTH CHECK */
+app.use('/auth', authRoute); /* FIREBASE AUTH ROUTE */
 
 /* HEALTHCHECK */
 /* app.get('/health', (_req, res) => {
@@ -39,6 +42,12 @@ app.use('/health',serverHealthRoute); /* HEALTH CHECK */
   console.log(`Server uptime: ${uptimeInHours} hours (${uptimeInSeconds} seconds)`);
 });
  */
+
+
+/* INITIALIZING TELEGRAM BOT */
+initTelegramBot();
+
+
 /* PUPPETEER CHECK */
 console.log('puppeteer headless: ', puppeteerConfig.PUPPETEER_HEADLESS)
 
