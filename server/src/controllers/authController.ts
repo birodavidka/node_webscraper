@@ -13,6 +13,11 @@ export const register = async (
   next: NextFunction
 ): Promise<void> => {
   const { email, password, ...profileData } = req.body;
+  if (!email || !password) {
+    res.status(400).json({ error: 'Email and password are required for registration' });
+    return;
+  }
+
   try {
     const userRecord = await firebaseService.registerUser(
       { email, password },
@@ -25,26 +30,28 @@ export const register = async (
 };
 
 /**
- * Logs in a user: verifies ID token sent in Authorization header
- * and returns decoded token payload.
+ * Logs in a user: accepts email/password in body,
+ * calls firebaseService.loginUser to get ID token,
+ * verifies it and returns token payload.
  */
 export const login = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Authorization header missing or malformed' });
+  const { email, password } = req.body;
+  if (!email || !password) {
+    res.status(400).json({ error: 'Email and password must be provided' });
     return;
   }
-  const token = authHeader.split(' ')[1];
+
   try {
-    const decodedToken = await firebaseService.verifyToken(token);
-    res.json({
-      email: decodedToken.email,
-      ...decodedToken,
-    });
+    // Authenticate with Firebase via REST API
+    const { idToken } = await firebaseService.loginUser({ email, password });
+    // Verify the token to get decoded payload
+    const decoded = await firebaseService.verifyToken(idToken);
+    // Return both token and user data
+    res.json({ idToken, ...decoded });
   } catch (error: any) {
     next(error);
   }
@@ -64,6 +71,7 @@ export const getProfile = async (
     res.status(400).json({ error: 'No UID provided' });
     return;
   }
+
   try {
     const profile = await firebaseService.getDocument('users', uid);
     if (!profile) {
