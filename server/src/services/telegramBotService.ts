@@ -1,32 +1,28 @@
 import { Telegraf, session, Markup, Context } from 'telegraf';
 import { WizardScene, Stage, Scenes } from 'telegraf/scenes';
-import { usedCars as exampleCars } from '../data/exampeData';  // fix named export import fileciteturn0file0  // Adjust path to your hardcoded data
+import { usedCars as exampleCars } from '../data/exampeData';
+import { getDistanceRoute } from '../services/googleMapsService';
 
-// User session data
 interface MySession {
   lang?: 'hu' | 'en' | 'de';
   currency?: 'HUF' | 'EUR';
   service?: 'rescue' | 'sales';
   rescueFrom?: string;
   rescueTo?: string;
+  rescueFinalTo?: string;
   pageIndex?: number;
 }
 
 type MyContext = Scenes.WizardContext & Context & { session: MySession };
 
-// Bot setup
 const bot = new Telegraf<MyContext>(process.env.TELEGRAM_BOT_API!);
 bot.use(session());
 
-// Stage setup for wizard scenes
 const stage = new Stage<MyContext>([]);
 bot.use(stage.middleware());
 
-// Main wizard: language → currency → service → [rescue or sales]
 const mainWizard = new WizardScene<MyContext>(
   'main-wizard',
-
-  // 0. Nyelvválasztás
   async (ctx) => {
     await ctx.reply(
       'Kérlek, válassz nyelvet:\nPlease choose your language:',
@@ -38,8 +34,6 @@ const mainWizard = new WizardScene<MyContext>(
     );
     return ctx.wizard.next();
   },
-
-  // 1. Valuta választás
   async (ctx) => {
     if (!ctx.callbackQuery || typeof ctx.callbackQuery.data !== 'string') return;
     const [, lang] = ctx.callbackQuery.data.split(':');
@@ -62,8 +56,6 @@ const mainWizard = new WizardScene<MyContext>(
     );
     return ctx.wizard.next();
   },
-
-  // 2. Szolgáltatás választása
   async (ctx) => {
     if (!ctx.callbackQuery || typeof ctx.callbackQuery.data !== 'string') return;
     const [, cur] = ctx.callbackQuery.data.split(':');
@@ -92,8 +84,6 @@ const mainWizard = new WizardScene<MyContext>(
     );
     return ctx.wizard.next();
   },
-
-  // 3. Service ág
   async (ctx) => {
     if (!ctx.callbackQuery || typeof ctx.callbackQuery.data !== 'string') return;
     const [, svc] = ctx.callbackQuery.data.split(':');
@@ -101,57 +91,79 @@ const mainWizard = new WizardScene<MyContext>(
     await ctx.answerCbQuery();
 
     if (svc === 'rescue') {
-      // Rescue branch: ask for pickup location
       const text = ctx.session.lang === 'hu'
-        ? 'Kérlek add meg a kiinduló pontot:'
+        ? 'Kérlek add meg a kiinduló pontot (A):'
         : ctx.session.lang === 'de'
-          ? 'Bitte Abholort eingeben:'
-          : 'Please enter the pickup location:';
+          ? 'Bitte Startpunkt eingeben (A):'
+          : 'Please enter the base address (A):';
       await ctx.reply(text);
       return ctx.wizard.next();
-
     } else {
-      // Sales branch: show photo carousel using exampleData
       ctx.session.pageIndex = 0;
       await showCarCarousel(ctx, 0);
       return ctx.scene.leave();
     }
   },
-
-  // 4. rescueFrom bekérés
   async (ctx) => {
-    ctx.session.rescueFrom = ctx.message?.text || '';
+    ctx.session.rescueFrom = 'Szombathely';
     const prompt = ctx.session.lang === 'hu'
-      ? 'Kérlek add meg a célállomást:'
+      ? 'Kérlek add meg a felvételi címet (B):'
       : ctx.session.lang === 'de'
-        ? 'Bitte Zielort eingeben:'
-        : 'Please enter the destination:';
+        ? 'Bitte Abholadresse eingeben (B):'
+        : 'Please enter the pickup address (B):';
     await ctx.reply(prompt);
     return ctx.wizard.next();
   },
-
-  // 5. rescueTo bekérés + Quote
   async (ctx) => {
     ctx.session.rescueTo = ctx.message?.text || '';
-    const price = computePrice(
-      ctx.session.rescueFrom!,
-      ctx.session.rescueTo!,
-      ctx.session.currency!
-    );
-    const text = ctx.session.lang === 'hu'
-      ? `Árajánlat: ${price} ${ctx.session.currency}`
+    const prompt = ctx.session.lang === 'hu'
+      ? 'Ha a végcél Szombathely, csak nyomj Entert. Ha máshova szeretnél menni, kérlek írd be a címet (C):'
       : ctx.session.lang === 'de'
-        ? `Angebot: ${price} ${ctx.session.currency}`
-        : `Quote: ${price} ${ctx.session.currency}`;
-    await ctx.reply(text);
+        ? 'Wenn das Ziel Szombathely ist, drücke einfach Enter. Gib sonst die Adresse ein (C):'
+        : 'If the final destination is Szombathely, just press Enter. Otherwise, enter the destination (C):';
+    await ctx.reply(prompt);
+    return ctx.wizard.next();
+  },
+  async (ctx) => {
+    ctx.session.rescueFinalTo = ctx.message?.text?.trim() || 'Szombathely';
+    try {
+      const result = await getDistanceRoute(
+        ctx.session.rescueFrom!,
+        ctx.session.rescueTo!,
+        ctx.session.rescueFinalTo!
+      );
+
+      const numericKm = parseFloat(result.totalDistance);
+      const kmRate = 250;
+      const totalHUF = Math.round(numericKm * kmRate);
+
+      const totalMinutes = parseInt(result.totalDuration.replace(/[^0-9]/g, '')) || 0;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const formattedDuration = hours > 0 ? `${hours} óra ${minutes} perc` : `${minutes} perc`;
+
+      const tarifainfo = ctx.session.lang === 'hu'
+        ? `💸 Díj (${kmRate} Ft/km): ${totalHUF} Ft`
+        : ctx.session.lang === 'de'
+        ? `💸 Gebühr (${kmRate} Ft/km): ${totalHUF} Ft`
+        : `💸 Fee (${kmRate} Ft/km): ${totalHUF} Ft`;
+
+      const text = ctx.session.lang === 'hu'
+        ? `Útvonal:\nA → B: ${result.abDistance} (${result.abDuration})\nB → C: ${result.bcDistance} (${result.bcDuration})\n\nÖsszesen: ${result.totalDistance}, kb. ${result.totalDuration}\n\n${tarifainfo}`
+        : ctx.session.lang === 'de'
+        ? `Route:\nA → B: ${result.abDistance} (${result.abDuration})\nB → C: ${result.bcDistance} (${result.bcDuration})\n\nGesamt: ${result.totalDistance}, ca. ${result.totalDuration}\n\n${tarifainfo}`
+        : `Route:\nA → B: ${result.abDistance} (${result.abDuration})\nB → C: ${result.bcDistance} (${result.bcDuration})\n\nTotal: ${result.totalDistance}, approx. ${result.totalDuration}\n\n${tarifainfo}`;
+
+      await ctx.reply(text);
+    } catch (err) {
+      await ctx.reply('❌ Hiba történt az útvonal lekérdezésekor.');
+    }
     return ctx.scene.leave();
   }
 );
 
-// Register scene
 stage.register(mainWizard);
 
-// Initialize bot
 export function initTelegramBot() {
   bot.command('start', (ctx) => ctx.scene.enter('main-wizard'));
   bot.launch().then(() => console.log('Telegram bot launched')).catch(console.error);
@@ -159,28 +171,19 @@ export function initTelegramBot() {
   process.once('SIGTERM', () => bot.stop('SIGTERM'));
 }
 
-// --- Helper functions ---
-
-/**
- * Display a photo carousel of cars from exampleData
- */
 async function showCarCarousel(ctx: MyContext, page: number) {
   const cars = exampleCars;
-  // Pagination settings
   const pageSize = 4;
   const start = page * pageSize;
   const slice = cars.slice(start, start + pageSize);
 
-  // Prepare media group array without captions
   const media = slice.map(car => ({
     type: 'photo',
-    media: car.photo1,    // az exampleData-ban lévő kép-URL
+    media: car.photo1,
   }));
 
-  // Send media group (carousel)
   await ctx.replyWithMediaGroup(media as any);
 
-  // After sending images, send a separate caption and buttons
   const titles = slice.map(car => `🚗 ${car.title}`).join("\n");
   const distanceLabel = slice.map(car =>
     ctx.session.lang === 'hu'
@@ -192,38 +195,6 @@ async function showCarCarousel(ctx: MyContext, page: number) {
       ? `${car.price} ${ctx.session.currency}`
       : `${car.price} ${ctx.session.currency}`
   ).join("\n");
-/*   const dateLabel = slice.map(car =>
-    `${new FormData(car.startDate, ctx.session.lang!)} – ${new FormData(car.endDate, ctx.session.lang!)}`
-  ).join("\n"); */
 
-  const caption = `${titles}\n${distanceLabel}\n${priceLabel}`;
-
-  // Navigation buttons
-  const buttons: any[] = [];
-  if (start + pageSize < cars.length) {
-    buttons.push(Markup.button.callback(
-      ctx.session.lang === 'hu' ? '▶ Következő' : 'Next ▶',
-      `CARSPAGE:${page + 1}`
-    ));
-  }
-  if (page > 0) {
-    buttons.push(Markup.button.callback(
-      ctx.session.lang === 'hu' ? '◀ Előző' : '◀ Prev',
-      `CARSPAGE:${page - 1}`
-    ));
-  }
-  buttons.push(Markup.button.callback(
-    ctx.session.lang === 'hu' ? '≡ Menü' : '≡ Menu',
-    'MENU'
-  ));
-
-  await ctx.reply(caption, Markup.inlineKeyboard(buttons.map(b => [b])));
-}
-
-/**
- * Simple price computation
- */
-function computePrice(from: string, to: string, cur: string): number {
-  const base = 100;
-  return Math.round(base + Math.random() * 200);
+  await ctx.reply(`${titles}\n${distanceLabel}\n${priceLabel}`);
 }
