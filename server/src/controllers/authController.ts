@@ -1,7 +1,7 @@
 // server/src/controllers/authController.ts
 
 import { Request, Response, NextFunction } from 'express';
-import firebaseService from '../services/firbaseService';
+import firebaseService from '../services/firebaseService';
 
 /**
  * Registers a new user: calls firebaseService.registerUser

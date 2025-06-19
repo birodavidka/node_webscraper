@@ -1,7 +1,7 @@
 // server/src/middlewares/authMiddleware.ts
 
 import { Request, Response, NextFunction } from 'express';
-import firebaseService from '../services/firbaseService';
+import firebaseService from '../services/firebaseService';
 
 /**
  * Express middleware to protect routes: verifies Firebase ID token
