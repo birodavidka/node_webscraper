@@ -25,6 +25,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 import scraperRoute from './routes/scraperRoute';
 import serverHealthRoute from './routes/serverHealthRoute';
 import authRoute from './routes/authRoute';
+import productRoute from './routes/productsRoute';
 
 /* ROUTES */
 app.get('/', (_req, res) => {
@@ -33,6 +34,7 @@ app.get('/', (_req, res) => {
 app.use('/api', scraperRoute)
 app.use('/health',serverHealthRoute); /* HEALTH CHECK */
 app.use('/auth', authRoute); /* FIREBASE AUTH ROUTE */
+app.use('/products', productRoute)
 
 /* HEALTHCHECK */
 /* app.get('/health', (_req, res) => {

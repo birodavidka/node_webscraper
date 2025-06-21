@@ -17,15 +17,19 @@ if (
   throw new Error('Firebase service account environment variables are not set.');
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey,
-  }),
-  databaseURL: process.env.FIREBASE_DATABASE_URL,
-});
+const serviceAccount = JSON.parse(
+  process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string
+) as admin.ServiceAccount;
 
-export const firestore = admin.firestore();
-export const realtimeDb = admin.database();
-export default admin;
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: process.env.FIREBASE_DATABASE_URL,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+  });
+}
+
+const firestore = admin.firestore();
+const realtimeDb = admin.database();
+
+export { admin, firestore, realtimeDb };
