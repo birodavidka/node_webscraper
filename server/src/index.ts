@@ -9,7 +9,8 @@ import bodyParser from 'body-parser';
 import { puppeteerConfig } from './config/puppeteerConfig';
 import { brightDataConfig } from './config/brightDataConfig';
 import {initTelegramBot} from './services/telegramBotService'
-import { uptime } from 'process';
+//import { uptime } from 'process';
+import logger from './services/loggerService';
 
 /* SETUP */
 const app = express();
@@ -17,7 +18,12 @@ const app = express();
 app.use(cors());
 app.use(helmet());
 app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
-app.use(morgan('common'));
+//app.use(morgan('common'));
+app.use(morgan('combined', {
+  stream: {
+    write: (message: string) => logger.info(message.trim())
+  }
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
